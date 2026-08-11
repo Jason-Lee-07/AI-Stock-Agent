@@ -60,8 +60,10 @@ st.caption("Hệ thống RAG tự động cập nhật tin tức & trích dẫn 
 @st.cache_resource
 def init_rag_chain():
     # Sử dụng HuggingFace Embeddings miễn phí, chạy nội bộ không cần API Key
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    )
+    
     vector_store = Chroma(
         persist_directory="./my_vector_db",
         embedding_function=embeddings
