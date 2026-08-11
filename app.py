@@ -72,7 +72,7 @@ os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 # 2. Khởi tạo mô hình (không cần truyền biến google_api_key vào trong ngoặc nữa)
 def init_rag_chain():
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-001"
+        model="models/text-embedding-004"
     )
     # ... (giữ nguyên các dòng code tiếp theo của bạn)
     vector_db = Chroma(
