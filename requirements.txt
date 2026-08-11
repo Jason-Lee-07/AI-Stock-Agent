@@ -11,3 +11,5 @@ pandas
 urllib3
 apscheduler
 sentence-transformers
+beautifulsoup4
+lxml
