@@ -33,7 +33,7 @@ import streamlit as st
 import analytics  # Thư viện tính toán FA/TA/Quant
 import screener
 from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -64,9 +64,9 @@ st.caption("Hệ thống RAG tự động cập nhật tin tức & trích dẫn 
 
 @st.cache_resource
 def init_rag_chain():
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    )
+    embeddings = GoogleGenerativeAIEmbeddings(
+    model="models/text-embedding-004" 
+)
     vector_db = Chroma(
         persist_directory="./my_vector_db",
         embedding_function=embeddings
