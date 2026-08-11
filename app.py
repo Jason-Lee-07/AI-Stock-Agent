@@ -64,10 +64,10 @@ st.caption("Hệ thống RAG tự động cập nhật tin tức & trích dẫn 
 
 @st.cache_resource
 def init_rag_chain():
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/text-embedding-004",
-    google_api_key=st.secrets["GOOGLE_API_KEY"]
-)
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/text-embedding-004",
+        google_api_key=st.secrets["GOOGLE_API_KEY"]
+    )
     vector_db = Chroma(
         persist_directory="./my_vector_db",
         embedding_function=embeddings
