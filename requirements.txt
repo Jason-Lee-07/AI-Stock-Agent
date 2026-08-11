@@ -13,3 +13,4 @@ apscheduler
 sentence-transformers
 beautifulsoup4
 lxml
+pandas-ta
