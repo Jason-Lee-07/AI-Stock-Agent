@@ -21,7 +21,7 @@ import vector_db
 import analytics  # Thư viện tính toán FA/TA/Quant
 import screener
 from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -59,9 +59,9 @@ st.caption("Hệ thống RAG tự động cập nhật tin tức & trích dẫn 
 
 @st.cache_resource
 def init_rag_chain():
-    # Khởi tạo Vector DB & Embeddings chuẩn
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-    
+    # Sử dụng HuggingFace Embeddings miễn phí, chạy nội bộ không cần API Key
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
     vector_store = Chroma(
         persist_directory="./my_vector_db",
         embedding_function=embeddings
