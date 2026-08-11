@@ -1,10 +1,7 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-torch
 torchvision
 streamlit
 langchain
 langchain-community
-langchain-huggingface
 langchain-google-genai
 langchain-chroma
 chromadb
@@ -13,7 +10,6 @@ requests
 pandas
 urllib3
 apscheduler
-sentence-transformers
 beautifulsoup4
 lxml
 pandas-ta
