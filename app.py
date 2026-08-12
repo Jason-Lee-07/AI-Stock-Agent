@@ -32,13 +32,11 @@ if not os.path.exists("./my_vector_db"):
     print("Khởi tạo kho dữ liệu lần đầu trên Cloud...")
     vector_db.update_vector_db()
 
-
 # 2. Lập lịch cào tin tự động 07:00 sáng mỗi ngày
 def start_scheduler():
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.add_job(vector_db.update_vector_db, 'cron', hour=7, minute=0)
     scheduler.start()
-
 
 if "scheduler_started" not in st.session_state:
     start_scheduler()
@@ -59,7 +57,6 @@ if 'trigger_scan' not in st.session_state:
 
 st.title("📈 Trợ Lý Phân Tích Chứng Khoán AI")
 st.caption("Hệ thống RAG tự động cập nhật tin tức & trích dẫn nguồn chuẩn xác từ báo chí")
-
 
 @st.cache_resource
 def init_rag_chain():
@@ -114,7 +111,6 @@ def init_rag_chain():
     )
     return chain
 
-
 rag_chain = init_rag_chain()
 
 # Bộ nhớ cuộc trò chuyện
@@ -150,18 +146,37 @@ if st.session_state.trigger_scan:
             st.write(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
 
-# Ô NHẬP LIỆU DUY NHẤT
-if user_query := st.chat_input("Nhập câu hỏi hoặc yêu cầu phân tích mã (VD: HPG)..."):
+# ==========================================
+# Ô NHẬP LIỆU DUY NHẤT & BỘ QUÉT MÃ CỔ PHIẾU TỐI ƯU
+# ==========================================
+if user_query := st.chat_input("Nhập câu hỏi hoặc yêu cầu phân tích mã (VD: HPG, fpt, so sánh SSI và VND)..."):
     st.session_state.messages.append({"role": "user", "content": user_query})
     st.chat_message("user").write(user_query)
 
     stock_context = ""
-    match = re.search(r'\b[A-Z]{3}\b', user_query)
-    if match:
-        ticker = match.group(0)
-        with st.spinner(f"Đang phân tích dữ liệu FA/TA/Quant cho mã {ticker}..."):
-            data = analytics.analyze_stock(ticker)
-            stock_context = f"\n\n[DỮ LIỆU TÀI CHÍNH & KỸ THUẬT MỚI NHẤT CỦA {ticker}]:\n{data}"
+
+    # 1. BỘ QUÉT THÔNG MINH: Tìm tất cả từ 3 chữ cái (bắt cả chữ hoa lẫn chữ thường)
+    raw_matches = re.findall(r'\b[a-zA-Z]{3}\b', user_query)
+
+    # 2. BỘ LỌC TỪ GÂY NHIỄU: Loại bỏ chỉ báo kỹ thuật & từ tiếng Việt 3 chữ cái
+    ignore_words = {
+        "RSI", "MAC", "GDP", "FDI", "PE", "EPS", "ROE", "BOT",
+        "MUA", "BAN", "GIA", "CHO", "NEN", "TOP", "HAY", "LAI",
+        "LUC", "MAI", "NAY", "ROI", "SAO", "THE", "TIN", "TOT", "XAU", "YEU"
+    }
+
+    found_tickers = []
+    for word in raw_matches:
+        ticker = word.upper()
+        if ticker not in ignore_words and ticker not in found_tickers:
+            found_tickers.append(ticker)
+
+    # 3. KÉO DỮ LIỆU ĐA MÃ CÙNG LÚC
+    if found_tickers:
+        with st.spinner(f"Đang phân tích dữ liệu FA/TA/Quant cho: {', '.join(found_tickers)}..."):
+            for ticker in found_tickers:
+                data = analytics.analyze_stock(ticker)
+                stock_context += f"\n\n[DỮ LIỆU TÀI CHÍNH & KỸ THUẬT MỚI NHẤT CỦA {ticker}]:\n{data}"
 
     with st.chat_message("assistant"):
         with st.spinner("Đang tổng hợp phân tích..."):
