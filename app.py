@@ -72,7 +72,7 @@ def init_rag_chain():
     retriever = vector_store.as_retriever(search_kwargs={"k": 3})
     
     # Sử dụng model Gemini Flash ổn định nhất
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+    llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
 
     system_prompt = (
         "Bạn là Giám đốc Quản lý Quỹ đầu tư chứng khoán Việt Nam.\n"
