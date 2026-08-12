@@ -1,34 +1,23 @@
+import streamlit as st
 import sys
 import os
 import re
-import os
 from apscheduler.schedulers.background import BackgroundScheduler
-import vector_db
 
-# 1. Tự động cào tin ngay khi server khởi động nếu phát hiện kho dữ liệu bị mất
-if not os.path.exists("./my_vector_db"):
-    print("Khởi tạo kho dữ liệu lần đầu trên Cloud...")
-    vector_db.update_vector_db()
+# Cấu hình trang Web (BẮT BUỘC đặt ở đầu file)
+st.set_page_config(page_title="AI Stock Agent", page_icon="📈", layout="centered")
 
-# 2. Lập lịch cào tin tự động 07:00 sáng mỗi ngày
-def start_scheduler():
-    scheduler = BackgroundScheduler(daemon=True)
-    scheduler.add_job(vector_db.update_vector_db, 'cron', hour=7, minute=0)
-    scheduler.start()
-
-if "scheduler_started" not in st.session_state:
-    start_scheduler()
-    st.session_state.scheduler_started = True
-
-# Ép Python luôn tìm thấy file analytics.py trong cùng thư mục dự án
+# Ép Python tìm thấy file trong cùng thư mục & chống lỗi UTF-8
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# Cấu hình mã hóa UTF-8 chống lỗi Unicode
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
-import streamlit as st
+# Đồng bộ API Key từ Streamlit Secrets vào Environment Variables
+if "GOOGLE_API_KEY" in st.secrets:
+    os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+
+import vector_db
 import analytics  # Thư viện tính toán FA/TA/Quant
 import screener
 from langchain_chroma import Chroma
@@ -38,8 +27,23 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-# Cấu hình trang Web
-st.set_page_config(page_title="AI Stock Agent", page_icon="📈", layout="centered")
+# 1. Tự động cào tin ngay khi server khởi động nếu phát hiện kho dữ liệu bị mất
+if not os.path.exists("./my_vector_db"):
+    print("Khởi tạo kho dữ liệu lần đầu trên Cloud...")
+    vector_db.update_vector_db()
+
+
+# 2. Lập lịch cào tin tự động 07:00 sáng mỗi ngày
+def start_scheduler():
+    scheduler = BackgroundScheduler(daemon=True)
+    scheduler.add_job(vector_db.update_vector_db, 'cron', hour=7, minute=0)
+    scheduler.start()
+
+
+if "scheduler_started" not in st.session_state:
+    start_scheduler()
+    st.session_state.scheduler_started = True
+
 # ==========================================
 # CÔNG CỤ QUÉT TOÀN THỊ TRƯỜNG (SIDEBAR)
 # ==========================================
@@ -50,12 +54,8 @@ with st.sidebar:
     if st.button("🔍 Quét Thị Trường 4 Bước", use_container_width=True):
         st.session_state.trigger_scan = True
 
-# Khởi tạo state để bắt sự kiện click nút
 if 'trigger_scan' not in st.session_state:
     st.session_state.trigger_scan = False
-# API Keys (Lưu ý: Thay API Key Gemini thật của bạn vào đây)
-os.environ["GOOGLE_API_KEY"] = "AQ.Ab8RN6Kf32iFopL5JZctllBGjGggmf3pVRfxjvaZFnF8jrwa9Q"
-os.environ["HF_TOKEN"] = "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"
 
 st.title("📈 Trợ Lý Phân Tích Chứng Khoán AI")
 st.caption("Hệ thống RAG tự động cập nhật tin tức & trích dẫn nguồn chuẩn xác từ báo chí")
@@ -63,26 +63,38 @@ st.caption("Hệ thống RAG tự động cập nhật tin tức & trích dẫn 
 
 @st.cache_resource
 def init_rag_chain():
+    # Sử dụng HuggingFace Embeddings chạy nội bộ
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     )
-    vector_db = Chroma(
+
+    vector_store = Chroma(
         persist_directory="./my_vector_db",
         embedding_function=embeddings
     )
-    retriever = vector_db.as_retriever(search_kwargs={"k": 3})
-    llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash", temperature=0)
+    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
 
+    # Kết nối mô hình Gemini
+    llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
+
+    # BƯỚC C: NÂNG CẤP PROMPT ĐÁNH GIÁ TÂM LÝ THỊ TRƯỜNG (MARKET SENTIMENT)
     system_prompt = (
-        "Bạn là Giám đốc Quản lý Quỹ đầu tư chứng khoán Việt Nam.\n"
-        "Hãy kết hợp linh hoạt 2 nguồn thông tin được cung cấp:\n"
-        "1. Dữ liệu Tin tức Báo chí trong Context (BẮT BUỘC trích dẫn [Link URL] ở cuối câu nếu dùng thông tin này).\n"
-        "2. Dữ liệu Số liệu Định lượng (Giá, MA50, ROE, RS Score) do Python cung cấp trong Input.\n\n"
-        "QUY TẮC PHÂN TÍCH:\n"
-        "- Với Bước 1 (Vĩ mô): Dùng tin tức báo chí để đánh giá sóng ngành. Nếu mã nào không có tin tức báo chí, hãy đánh giá sức mạnh ngành dựa vào RS Score và Tăng trưởng lợi nhuận từ số liệu Python.\n"
-        "- Với Bước 4 (Kịch bản): Dùng Giá đóng cửa và MA50 để tự tính toán Điểm mua Breakout (Giá đỉnh +2%) và Điểm Cắt lỗ (Vùng MA50 hoặc -5% từ giá mua).\n\n"
+        "Bạn là Giám đốc Quản lý Quỹ kiêm Chuyên gia Phân tích Tâm lý Thị trường Chứng khoán Việt Nam.\n"
+        "Nhiệm vụ của bạn là kết hợp Dữ liệu Tin tức Báo chí (Context) và Dữ liệu Định lượng (Input) để đưa ra góc nhìn sắc bén.\n\n"
+        "BẮT BUỘC CẤU TRÚC BÀI PHÂN TÍCH THEO CÁC BƯỚC:\n"
+        "1. 🧠 **ĐÁNH GIÁ TÂM LÝ THỊ TRƯỜNG (MARKET SENTIMENT)**:\n"
+        "   - Phân loại sắc thái tin tức vĩ mô/ngành hiện tại: [TÍCH CỰC (Bullish) / TIÊU CỰC (Bearish) / TRUNG LẬP (Neutral)].\n"
+        "   - Tóm tắt 1-2 ý chính từ tin tức làm cơ sở phân loại (BẮT BUỘC trích dẫn [Link URL] từ Context ở cuối câu).\n"
+        "   - Đánh giá tâm lý nhà đầu tư cá nhân (Đang hưng phấn, lo sợ hay quan sát?).\n\n"
+        "2. 📊 **PHÂN TÍCH ĐỊNH LƯỢNG & DÒNG TIỀN (FA/TA/VOLUME)**:\n"
+        "   - Đánh giá sức khỏe tài chính (P/E, ROE) và kỹ thuật (Xu hướng MA50, RSI).\n"
+        "   - Đặc biệt chú ý dòng 'Dấu chân Dòng tiền (Volume)' do Python cung cấp để nhận diện cá mập gom/xả.\n\n"
+        "3. 🎯 **KỊCH BẢN GIAO DỊCH & HÀNH ĐỘNG**:\n"
+        "   - Kết luận: CÓ NÊN MUA HAY KHÔNG?\n"
+        "   - Đưa ra vùng Giá mua Breakout (+2% từ đỉnh ngắn hạn) và Điểm Cắt lỗ cụ thể (-5% hoặc vi phạm MA50).\n\n"
         "Context Tin Tức:\n{context}"
     )
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("human", "{input}"),
@@ -94,12 +106,13 @@ def init_rag_chain():
             for doc in docs
         )
 
-    return (
+    chain = (
             {"context": retriever | format_docs, "input": RunnablePassthrough()}
             | prompt
             | llm
             | StrOutputParser()
     )
+    return chain
 
 
 rag_chain = init_rag_chain()
@@ -112,22 +125,19 @@ if "messages" not in st.session_state:
 
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
+
 # Xử lý sự kiện bấm nút Quét thị trường
 if st.session_state.trigger_scan:
-    # Reset nút
     st.session_state.trigger_scan = False
 
-    # Tạo câu prompt tự động hiển thị trên giao diện
     scan_request = "Hệ thống: Kích hoạt thuật toán quét thị trường 4 bước..."
     st.session_state.messages.append({"role": "user", "content": scan_request})
     st.chat_message("user").write(scan_request)
 
     with st.chat_message("assistant"):
         with st.spinner("Đang chạy bộ lọc định lượng hàng ngàn mã..."):
-            # 1. Gọi Bước 2 & 3: Python quét và chấm điểm
             top_stocks_data = screener.run_market_screener()
 
-            # 2. Gọi Bước 1 & 4: Giao cho AI tư duy Vĩ mô và tìm Điểm nổ
             ai_prompt = (
                 f"Dữ liệu định lượng vừa lọc được các mã dẫn dắt sau:\n{top_stocks_data}\n\n"
                 "Nhiệm vụ của bạn (Áp dụng Tư duy Top-Down và Tìm Điểm Nổ):\n"
@@ -136,18 +146,16 @@ if st.session_state.trigger_scan:
             )
 
         with st.spinner("AI đang phân tích vĩ mô và thiết lập kịch bản giao dịch..."):
-            # Gửi yêu cầu qua RAG Chain
             response = rag_chain.invoke(ai_prompt)
             st.write(response)
             st.session_state.messages.append({"role": "assistant", "content": response})
+
 # Ô NHẬP LIỆU DUY NHẤT
 if user_query := st.chat_input("Nhập câu hỏi hoặc yêu cầu phân tích mã (VD: HPG)..."):
     st.session_state.messages.append({"role": "user", "content": user_query})
     st.chat_message("user").write(user_query)
 
     stock_context = ""
-
-    # Dùng Regex tự động tìm mã chứng khoán 3 chữ cái IN HOA trong câu văn
     match = re.search(r'\b[A-Z]{3}\b', user_query)
     if match:
         ticker = match.group(0)
